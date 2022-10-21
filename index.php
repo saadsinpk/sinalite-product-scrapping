@@ -119,237 +119,240 @@ function insert_attribute_to_wp($post_id, $get_products_value, $resp_value){
 function update_products_from_sinalite() {
    global $wpdb;
    if( isset( $_GET['clearSinaliteProduct'] ) ) {
-      $set_7_day_time = strtotime('-7 day');
-       $myproducts = get_posts( array('post_type' => 'product', 'post_status' => 'publish', 'numberposts' => -1,) );
-       $myproducts_variation = get_posts( array('post_type' => 'product_variation', 'post_status' => 'publish', 'numberposts' => 4000,) );
-
-       foreach ( $myproducts as $myproduct ) {
-           wp_delete_post( $myproduct->ID, true); // Set to False if you want to send them to Trash.
-       } 
-
-       foreach ( $myproducts_variation as $myproduct_variation ) {
-           wp_delete_post( $myproduct_variation->ID, true); // Set to False if you want to send them to Trash.
-       } 
-
-      update_option( 'senalite_prod_update', $set_7_day_time);
-      $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products");
-      $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products_variant");
-      $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products_variant_price");
+      update_option( 'delete_sinalite', 1);
       wp_redirect('?page=sinalite-setting');
       exit;
    }
    if( isset( $_GET['update_products_sinalite'] ) ) {
-      // $product_attributes = get_post_meta( 14442, '_product_attributes', true);
-      // echo "<pre>";
-      // print_r($product_attributes);
-      // echo "</pre>";
-      // $product_attributes = get_post_meta( 14442, '', true);
-      // echo "<pre>";
-      // print_r($product_attributes);
-      // echo "</pre>";
-      // exit;
-
-      // exit;
-      // $get_products = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}sinalite_products_variant WHERE update_prod = 0 LIMIT 1", OBJECT );
-      // foreach ($get_products as $get_products_key => $get_products_value) {
-
-      // }
-
-      // exit;
-      //Create main product
-
-      $resp = get_list_of_prdocuts_from_api();
-      $db_time = get_option( 'senalite_prod_update' );
-      update_option( 'senalite_last_cron_run', time());
-      
-      if(empty($db_time)) {
-         $check_7_day_time = time();
-      } else {
-         $check_7_day_time = strtotime('+7 day', $db_time);
-      }
-      if(time() >= $check_7_day_time) {
-         foreach ($resp as $resp_key => $resp_value) {
-            update_option( 'senalite_prod_update', time());
-             $checkIfExists = $wpdb->get_var("SELECT id FROM {$wpdb->prefix}sinalite_products WHERE prod_id = $resp_value->id");
-
-             if ($checkIfExists == NULL) {
-               $wpdb->query("INSERT INTO {$wpdb->prefix}sinalite_products (prod_id, prod_sku, prod_name, prod_category, prod_enabled) VALUES($resp_value->id, '$resp_value->sku', '$resp_value->name', '$resp_value->category', '$resp_value->enabled')"); 
-               $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products_variant SET `attri_id`=0 WHERE prod_id = $resp_value->id"); 
-               $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products_variant_price SET `variant_id`=0 WHERE prod_id = $resp_value->id"); 
-            } else {
-               $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products SET `update_prod`=0 WHERE prod_id = $resp_value->id"); 
-            }
-         }
-         $get_products = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}sinalite_products WHERE update_prod = 1", OBJECT );
-
-          foreach ( $get_products as $get_product ) {
-            if($get_product->woo_prod_id > 0) {
-               wp_delete_post( $get_product->woo_prod_id, true); // Set to False if you want to send them to Trash.
-            }
-            $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products WHERE `id`= $get_product->id");
-          } 
+      $delete_option = get_option( 'delete_sinalite' );
+      if($delete_option == 1) {
+          $myproducts = get_posts( array('post_type' => 'product', 'post_status' => 'publish', 'numberposts' => 10,) );
+          if(count($myproducts) == 0) {
+            $set_7_day_time = strtotime('-7 day');
+            update_option( 'senalite_prod_update', $set_7_day_time);
+            update_option( 'delete_sinalite', 0);
+          } else {
+             foreach ( $myproducts as $myproduct ) {
+                 wp_delete_post( $myproduct->ID, true); // Set to False if you want to send them to Trash.
+             } 
+          }
+         $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products");
          $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products_variant");
          $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products_variant_price");
-      }
-      $get_products = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}sinalite_products WHERE update_prod = 0 LIMIT 1", OBJECT );
-      foreach ($get_products as $get_products_key => $get_products_value) {
-         $term = get_term_by('name', $get_products_value->prod_category, 'product_cat');
-         if(!isset($term->term_id)) {
-            $term = wp_insert_term(
-              $get_products_value->prod_category, // the term 
-              'product_cat', // the taxonomy
-              array(
-                'description'=> $get_products_value->prod_category,
-                'slug' => $get_products_value->prod_category
-              )
-            );
-         }
+         exit;
+      } else {
+         // $product_attributes = get_post_meta( 14442, '_product_attributes', true);
+         // echo "<pre>";
+         // print_r($product_attributes);
+         // echo "</pre>";
+         // $product_attributes = get_post_meta( 14442, '', true);
+         // echo "<pre>";
+         // print_r($product_attributes);
+         // echo "</pre>";
+         // exit;
 
-         $post_id = 0;
-         $data = $wpdb->get_results($wpdb->prepare( "SELECT * FROM $wpdb->postmeta WHERE meta_key = %s AND meta_value = %s", '_sinalite_prod_id', $get_products_value->prod_id) , ARRAY_N );
-         if(isset($data[0])) {
-            $post_id = wp_update_post( array(
-               'ID' => $data[0][1],
-               'post_title' => $get_products_value->prod_name,
-               'post_content' => $get_products_value->prod_name,
-               'post_status' => 'publish',
-               'post_type' => "product",
-            ));
-            $post_id = $data[0][1];
+         // exit;
+         // $get_products = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}sinalite_products_variant WHERE update_prod = 0 LIMIT 1", OBJECT );
+         // foreach ($get_products as $get_products_key => $get_products_value) {
 
-            update_post_meta( $post_id, '_sinalite_prod_id', $get_products_value->prod_id);
-            wp_set_object_terms($post_id, 'variable', 'product_type');
-            wp_set_object_terms($post_id, $term->term_id, 'product_cat');
+         // }
+
+         // exit;
+         //Create main product
+
+         $resp = get_list_of_prdocuts_from_api();
+         $db_time = get_option( 'senalite_prod_update' );
+         update_option( 'senalite_last_cron_run', time());
+         
+         if(empty($db_time)) {
+            $check_7_day_time = time();
          } else {
-            $post_id = wp_insert_post( array(
-               'post_title' => $get_products_value->prod_name,
-               'post_content' => $get_products_value->prod_name,
-               'post_status' => 'publish',
-               'post_type' => "product",
-            ));
-
-            update_post_meta( $post_id, '_sinalite_prod_id', $get_products_value->prod_id);
-            wp_set_object_terms($post_id, 'variable', 'product_type');
-            wp_set_object_terms($post_id, $term->term_id, 'product_cat');
+            $check_7_day_time = strtotime('+7 day', $db_time);
          }
-         $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products SET `woo_prod_id`=$post_id  WHERE `id` = $get_products_value->id "); 
-         // $post_id
-         $resp = fetch_product_from_api($get_products_value->prod_id);
-         $attributes_data = array();
-         foreach ($resp[0] as $resp_key => $resp_value) {
-            $attributes_data[$resp_value->group][] = $resp_value->name;
-            insert_attribute_to_wp($post_id, $get_products_value, $resp_value);
-         }
+         if(time() >= $check_7_day_time) {
+            foreach ($resp as $resp_key => $resp_value) {
+               update_option( 'senalite_prod_update', time());
+                $checkIfExists = $wpdb->get_var("SELECT id FROM {$wpdb->prefix}sinalite_products WHERE prod_id = $resp_value->id");
 
-         if( sizeof($attributes_data) > 0 ){
-             $attributes = array(); // Initializing
-
-             // Loop through defined attribute data
-             $count_key = 0;
-             foreach( $attributes_data as $attribute_key => $attribute_array ) {
-                 if( isset($attribute_key) ){
-                     // Clean attribute name to get the taxonomy
-                     $taxonomy = wc_sanitize_taxonomy_name( $attribute_key );
-
-                     $option_term_ids = array(); // Initializing
-
-                     // Loop through defined attribute data options (terms values)
-                     foreach( $attribute_array as $option ){
-                        createAttribute($attribute_key, $taxonomy);
-                        $return_term = createTerm($option, sanitize_title($option), $taxonomy, $count_key);
-                     update_term_to_db($post_id, $option, $attribute_key, $return_term->term_id);
-
-                          $option_term_ids[$taxonomy][] = $return_term->term_id;
-                          wp_set_object_terms( $post_id, $option, wc_attribute_taxonomy_name($taxonomy), true );
-                     }
-                       // Get the term ID
-                    // Loop through defined attribute data
-                    $attributes[wc_attribute_taxonomy_name($taxonomy)] = array(
-                        'name'          => wc_attribute_taxonomy_name($taxonomy),
-                        'value'         => '', // Need to be term IDs
-                        'position'      => $count_key + 1,
-                        'is_visible'    => 1,
-                        'is_variation'  => 1,
-                        'is_taxonomy'   => '1'
-                    );
-                 }
-                 $count_key++;
-             }
-             // Save the meta entry for product attributes
-             update_post_meta( $post_id, '_product_attributes', $attributes );
-         }
-
-         $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products_variant WHERE `prod_id`= '".$get_products_value->prod_id."' AND `update_prod`=1");
-
-         $variant_resp = fetch_variant_from_product($get_products_value->prod_id);
-
-         foreach ($variant_resp as $variant_resp_key => $variant_resp_value) {
-            $response_key = explode("-", $variant_resp_value->key);
-            sort($response_key);
-            $response_key = json_encode($response_key);
-             $checkIfExistsVariant = $wpdb->get_var("SELECT id FROM {$wpdb->prefix}sinalite_products_variant_price WHERE `prod_id` = $get_products_value->prod_id AND `price` = $variant_resp_value->price AND `key` = '".$response_key."'");
-             if ($checkIfExistsVariant == NULL) {
-               $wpdb->query("INSERT INTO {$wpdb->prefix}sinalite_products_variant_price (`woo_prod_id`, `prod_id`, `price`, `key`) VALUES($post_id, $get_products_value->prod_id,   $variant_resp_value->price, '$response_key')"); 
-            } else {
-               $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products_variant_price SET `update_prod`=0, `woo_prod_id` = $post_id  WHERE `prod_id` = $get_products_value->prod_id AND `price` = $variant_resp_value->price AND `key` = '".$response_key."'"); 
-            }
-         }
-         $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products_variant_price WHERE `prod_id`= '".$get_products_value->prod_id."' AND `update_prod`=1");
-         $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products SET `update_prod`=1 WHERE `prod_id` = $get_products_value->prod_id "); 
-      }
-      $variants_array = array();
-      $get_products_variant = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}sinalite_products_variant WHERE update_prod = 0", OBJECT );
-      foreach ($get_products_variant as $get_products_variant_key => $get_products_variant_value) {
-         $variants_array[$get_products_variant_value->variant_id]['group'] = $get_products_variant_value->group;
-         $variants_array[$get_products_variant_value->variant_id]['name'] = $get_products_variant_value->name;
-      }
-
-      $variation_data = array();
-      $get_products_variant_price = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}sinalite_products_variant_price WHERE update_prod = 0 LIMIT 100", OBJECT );
-         foreach ($get_products_variant_price as $get_products_variant_key => $get_products_variant_value) {
-            if(!empty($get_products_variant_value->key)) {
-               $parent_product_id = $get_products_variant_value->woo_prod_id;
-               $product_variants = json_decode($get_products_variant_value->key);
-               $product_price = $get_products_variant_value->price;
-               $variant_array = array();
-               foreach ($product_variants as $product_variants_key => $product_variants_value) {
-                  $variant_key = $variants_array[$product_variants_value]['group'];
-                     $taxonomy = wc_attribute_taxonomy_name(wc_sanitize_taxonomy_name( $variant_key ));
-                  $variant_value = $variants_array[$product_variants_value]['name'];
-                  $variant_array[$taxonomy] = wc_sanitize_taxonomy_name($variant_value);
-               }
-
-               if($get_products_variant_value->variant_id > 0) {
-                     $variation_product_id = $get_products_variant_value->variant_id;
+                if ($checkIfExists == NULL) {
+                  $wpdb->query("INSERT INTO {$wpdb->prefix}sinalite_products (prod_id, prod_sku, prod_name, prod_category, prod_enabled) VALUES($resp_value->id, '$resp_value->sku', '$resp_value->name', '$resp_value->category', '$resp_value->enabled')"); 
+                  $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products_variant SET `attri_id`=0 WHERE prod_id = $resp_value->id"); 
+                  $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products_variant_price SET `variant_id`=0 WHERE prod_id = $resp_value->id"); 
                } else {
-                  $variation_product = array( 
-                     'post_title'  => get_the_title($parent_product_id).' #'.$get_products_variant_value->id,
-                     'post_name'   => 'product-' . $parent_product_id . '-variation',
-                     'post_status' => 'publish',
-                     'post_parent' => $parent_product_id,
-                     'post_type'   => 'product_variation'
-                  );
-                  $variation_product_id = wp_insert_post( $variation_product ); 
+                  $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products SET `update_prod`=0 WHERE prod_id = $resp_value->id"); 
                }
-
-               if(get_option( 'sinalite_price_percentage' )){
-                  $percentage = get_option( 'sinalite_price_percentage' );
-                  $percentage_value = $product_price * $percentage / 100;
-                  $product_price = $product_price + $percentage_value;
-               }
-
-               update_post_meta( $variation_product_id, '_regular_price', $product_price );
-               update_post_meta( $variation_product_id, '_price', $product_price );
-               update_post_meta( $variation_product_id, '_manage_stock', 'true' );
-               update_post_meta( $variation_product_id, '_stock', 100 );
-
-               $variation = new WC_Product_Variation($variation_product_id);
-               $variation->set_attributes($variant_array);
-
-               $variation->save();           
-               update_variant_post_woo_id($get_products_variant_value->id, $variation_product_id);
             }
-         $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products_variant_price SET `update_prod`=1 WHERE `id` = $get_products_variant_value->id "); 
+            $get_products = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}sinalite_products WHERE update_prod = 1", OBJECT );
+
+             foreach ( $get_products as $get_product ) {
+               if($get_product->woo_prod_id > 0) {
+                  wp_delete_post( $get_product->woo_prod_id, true); // Set to False if you want to send them to Trash.
+               }
+               $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products WHERE `id`= $get_product->id");
+             } 
+            $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products_variant");
+            $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products_variant_price");
+         }
+         $get_products = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}sinalite_products WHERE update_prod = 0 LIMIT 1", OBJECT );
+         foreach ($get_products as $get_products_key => $get_products_value) {
+            $term = get_term_by('name', $get_products_value->prod_category, 'product_cat');
+            if(!isset($term->term_id)) {
+               $term = wp_insert_term(
+                 $get_products_value->prod_category, // the term 
+                 'product_cat', // the taxonomy
+                 array(
+                   'description'=> $get_products_value->prod_category,
+                   'slug' => $get_products_value->prod_category
+                 )
+               );
+            }
+
+            $post_id = 0;
+            $data = $wpdb->get_results($wpdb->prepare( "SELECT * FROM $wpdb->postmeta WHERE meta_key = %s AND meta_value = %s", '_sinalite_prod_id', $get_products_value->prod_id) , ARRAY_N );
+            if(isset($data[0])) {
+               $post_id = wp_update_post( array(
+                  'ID' => $data[0][1],
+                  'post_title' => $get_products_value->prod_name,
+                  'post_content' => $get_products_value->prod_name,
+                  'post_status' => 'publish',
+                  'post_type' => "product",
+               ));
+               $post_id = $data[0][1];
+
+               update_post_meta( $post_id, '_sinalite_prod_id', $get_products_value->prod_id);
+               wp_set_object_terms($post_id, 'variable', 'product_type');
+               wp_set_object_terms($post_id, $term->term_id, 'product_cat');
+            } else {
+               $post_id = wp_insert_post( array(
+                  'post_title' => $get_products_value->prod_name,
+                  'post_content' => $get_products_value->prod_name,
+                  'post_status' => 'publish',
+                  'post_type' => "product",
+               ));
+
+               update_post_meta( $post_id, '_sinalite_prod_id', $get_products_value->prod_id);
+               wp_set_object_terms($post_id, 'variable', 'product_type');
+               wp_set_object_terms($post_id, $term->term_id, 'product_cat');
+            }
+            $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products SET `woo_prod_id`=$post_id  WHERE `id` = $get_products_value->id "); 
+            // $post_id
+            $resp = fetch_product_from_api($get_products_value->prod_id);
+            $attributes_data = array();
+            foreach ($resp[0] as $resp_key => $resp_value) {
+               $attributes_data[$resp_value->group][] = $resp_value->name;
+               insert_attribute_to_wp($post_id, $get_products_value, $resp_value);
+            }
+
+            if( sizeof($attributes_data) > 0 ){
+                $attributes = array(); // Initializing
+
+                // Loop through defined attribute data
+                $count_key = 0;
+                foreach( $attributes_data as $attribute_key => $attribute_array ) {
+                    if( isset($attribute_key) ){
+                        // Clean attribute name to get the taxonomy
+                        $taxonomy = wc_sanitize_taxonomy_name( $attribute_key );
+
+                        $option_term_ids = array(); // Initializing
+
+                        // Loop through defined attribute data options (terms values)
+                        foreach( $attribute_array as $option ){
+                           createAttribute($attribute_key, $taxonomy);
+                           $return_term = createTerm($option, sanitize_title($option), $taxonomy, $count_key);
+                        update_term_to_db($post_id, $option, $attribute_key, $return_term->term_id);
+
+                             $option_term_ids[$taxonomy][] = $return_term->term_id;
+                             wp_set_object_terms( $post_id, $option, wc_attribute_taxonomy_name($taxonomy), true );
+                        }
+                          // Get the term ID
+                       // Loop through defined attribute data
+                       $attributes[wc_attribute_taxonomy_name($taxonomy)] = array(
+                           'name'          => wc_attribute_taxonomy_name($taxonomy),
+                           'value'         => '', // Need to be term IDs
+                           'position'      => $count_key + 1,
+                           'is_visible'    => 1,
+                           'is_variation'  => 1,
+                           'is_taxonomy'   => '1'
+                       );
+                    }
+                    $count_key++;
+                }
+                // Save the meta entry for product attributes
+                update_post_meta( $post_id, '_product_attributes', $attributes );
+            }
+
+            $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products_variant WHERE `prod_id`= '".$get_products_value->prod_id."' AND `update_prod`=1");
+
+            $variant_resp = fetch_variant_from_product($get_products_value->prod_id);
+
+            foreach ($variant_resp as $variant_resp_key => $variant_resp_value) {
+               $response_key = explode("-", $variant_resp_value->key);
+               sort($response_key);
+               $response_key = json_encode($response_key);
+                $checkIfExistsVariant = $wpdb->get_var("SELECT id FROM {$wpdb->prefix}sinalite_products_variant_price WHERE `prod_id` = $get_products_value->prod_id AND `price` = $variant_resp_value->price AND `key` = '".$response_key."'");
+                if ($checkIfExistsVariant == NULL) {
+                  $wpdb->query("INSERT INTO {$wpdb->prefix}sinalite_products_variant_price (`woo_prod_id`, `prod_id`, `price`, `key`) VALUES($post_id, $get_products_value->prod_id,   $variant_resp_value->price, '$response_key')"); 
+               } else {
+                  $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products_variant_price SET `update_prod`=0, `woo_prod_id` = $post_id  WHERE `prod_id` = $get_products_value->prod_id AND `price` = $variant_resp_value->price AND `key` = '".$response_key."'"); 
+               }
+            }
+            $wpdb->query("DELETE FROM {$wpdb->prefix}sinalite_products_variant_price WHERE `prod_id`= '".$get_products_value->prod_id."' AND `update_prod`=1");
+            $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products SET `update_prod`=1 WHERE `prod_id` = $get_products_value->prod_id "); 
+         }
+         $variants_array = array();
+         $get_products_variant = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}sinalite_products_variant WHERE update_prod = 0", OBJECT );
+         foreach ($get_products_variant as $get_products_variant_key => $get_products_variant_value) {
+            $variants_array[$get_products_variant_value->variant_id]['group'] = $get_products_variant_value->group;
+            $variants_array[$get_products_variant_value->variant_id]['name'] = $get_products_variant_value->name;
+         }
+
+         $variation_data = array();
+         $get_products_variant_price = $wpdb->get_results( "SELECT * FROM {$wpdb->prefix}sinalite_products_variant_price WHERE update_prod = 0 LIMIT 100", OBJECT );
+            foreach ($get_products_variant_price as $get_products_variant_key => $get_products_variant_value) {
+               if(!empty($get_products_variant_value->key)) {
+                  $parent_product_id = $get_products_variant_value->woo_prod_id;
+                  $product_variants = json_decode($get_products_variant_value->key);
+                  $product_price = $get_products_variant_value->price;
+                  $variant_array = array();
+                  foreach ($product_variants as $product_variants_key => $product_variants_value) {
+                     $variant_key = $variants_array[$product_variants_value]['group'];
+                        $taxonomy = wc_attribute_taxonomy_name(wc_sanitize_taxonomy_name( $variant_key ));
+                     $variant_value = $variants_array[$product_variants_value]['name'];
+                     $variant_array[$taxonomy] = wc_sanitize_taxonomy_name($variant_value);
+                  }
+
+                  if($get_products_variant_value->variant_id > 0) {
+                        $variation_product_id = $get_products_variant_value->variant_id;
+                  } else {
+                     $variation_product = array( 
+                        'post_title'  => get_the_title($parent_product_id).' #'.$get_products_variant_value->id,
+                        'post_name'   => 'product-' . $parent_product_id . '-variation',
+                        'post_status' => 'publish',
+                        'post_parent' => $parent_product_id,
+                        'post_type'   => 'product_variation'
+                     );
+                     $variation_product_id = wp_insert_post( $variation_product ); 
+                  }
+
+                  if(get_option('sinalite_price_percentage')){
+                     $percentage = get_option( 'sinalite_price_percentage' );
+                     $percentage_value = $product_price * $percentage / 100;
+                     $product_price = $product_price + $percentage_value;
+                  }
+
+                  update_post_meta( $variation_product_id, '_regular_price', $product_price );
+                  update_post_meta( $variation_product_id, '_price', $product_price );
+                  update_post_meta( $variation_product_id, '_manage_stock', 'true' );
+                  update_post_meta( $variation_product_id, '_stock', 100 );
+
+                  $variation = new WC_Product_Variation($variation_product_id);
+                  $variation->set_attributes($variant_array);
+
+                  $variation->save();           
+                  update_variant_post_woo_id($get_products_variant_value->id, $variation_product_id);
+               }
+            $wpdb->query("UPDATE {$wpdb->prefix}sinalite_products_variant_price SET `update_prod`=1 WHERE `id` = $get_products_variant_value->id "); 
+         }
       }
 
       exit();
@@ -444,6 +447,15 @@ function my_admin_page_contents() {
          <td><?php echo date('m/d/Y g:i:s A', $db_time);?></td>
       </tr>
       <tr>
+         <th>Is delete in progress?</th>
+         <?php $delete_option = get_option( 'delete_sinalite' );
+         if($delete_option == 1) {?>
+            <td>Yes</td>
+         <?php } else { ?>
+            <td>No</td>
+         <?php } ?>
+      </tr>
+      <tr>
          <th>Next automation start</th>
          <td><?php echo date('m/d/Y g:i:s A', strtotime('+7 day', $db_time));?></td>
       </tr>
@@ -466,9 +478,9 @@ function my_admin_page_contents() {
     </table>
     <form method="POST" action="options.php">
     <?php
-    settings_fields( 'sinalite-setting' );
-    do_settings_sections( 'sinalite-setting' );
-    submit_button();
+       settings_fields( 'sinalite-setting' );
+       do_settings_sections( 'sinalite-setting' );
+       submit_button();
     ?>
     </form>
     <?php
